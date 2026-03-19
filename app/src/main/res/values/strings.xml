@@ -900,4 +900,43 @@
     <string name="kao_dialog_warning">In August 2025, Google announced that as of September 2026, installing apps will require developer verification for all Android apps on certified devices, including those installed outside of the Play Store. Since the developers of NewPipe do not agree to this requirement, NewPipe will no longer work on certified Android devices after that time.</string>
     <string name="kao_dialog_more_info">Details</string>
     <string name="kao_solution">Solution</string>
+
+    <!-- Proxy -->
+    <string name="settings_category_proxy_title">Proxy</string>
+
+    <string name="proxy_enabled_key">proxy_enabled</string>
+    <string name="proxy_enabled_title">Use proxy</string>
+    <string name="proxy_enabled_summary">Route network traffic through a proxy (requires app restart)</string>
+
+    <string name="proxy_type_key">proxy_type</string>
+    <string name="proxy_type_title">Proxy type</string>
+    <string name="proxy_type_summary">Select proxy type</string>
+    <string name="proxy_type_http_value">http</string>
+    <string name="proxy_type_socks5_value">socks5</string>
+
+    <string name="proxy_host_key">proxy_host</string>
+    <string name="proxy_host_title">Proxy host</string>
+    <string name="proxy_host_summary">Hostname or IP address</string>
+
+    <string name="proxy_port_key">proxy_port</string>
+    <string name="proxy_port_title">Proxy port</string>
+    <string name="proxy_port_summary">Port number</string>
+    <string name="proxy_port_default">1080</string>
+
+    <string name="proxy_username_key">proxy_username</string>
+    <string name="proxy_username_title">Username</string>
+    <string name="proxy_username_summary">Optional</string>
+
+    <string name="proxy_password_key">proxy_password</string>
+    <string name="proxy_password_title">Password</string>
+    <string name="proxy_password_summary">Optional (not shown)</string>
+
+    <string-array name="proxy_type_entries">
+        <item>HTTP</item>
+        <item>SOCKS5</item>
+    </string-array>
+    <string-array name="proxy_type_entry_values">
+        <item>@string/proxy_type_http_value</item>
+        <item>@string/proxy_type_socks5_value</item>
+    </string-array>
 </resources>

@@ -28,6 +28,8 @@ class DebugApp : App() {
             OkHttpClient.Builder()
                 .addNetworkInterceptor(StethoInterceptor())
         )
+        // Ensure proxy and network settings are applied on cold start in debug builds.
+        downloader.updateNetworkConfiguration(this)
         setCookiesToDownloader(downloader)
         return downloader
     }

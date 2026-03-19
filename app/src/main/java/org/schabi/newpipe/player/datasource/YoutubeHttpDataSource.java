@@ -54,6 +54,7 @@ import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.NoRouteToHostException;
+import java.net.Proxy;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
@@ -708,6 +709,13 @@ public final class YoutubeHttpDataSource extends BaseDataSource implements HttpD
      * @return an {@link HttpURLConnection} created with the {@code url}
      */
     private HttpURLConnection openConnection(@NonNull final URL url) throws IOException {
+        final DownloaderImpl downloader = DownloaderImpl.getInstance();
+        if (downloader != null) {
+            final Proxy proxy = downloader.getClient().proxy();
+            if (proxy != null && proxy.type() != Proxy.Type.DIRECT) {
+                return (HttpURLConnection) url.openConnection(proxy);
+            }
+        }
         return (HttpURLConnection) url.openConnection();
     }
 

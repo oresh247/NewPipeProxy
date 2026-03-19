@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
@@ -36,6 +38,7 @@ public class ContentSettingsFragment extends BasePreferenceFragment {
 
         setupAppLanguagePreferences();
         setupImageQualityPref();
+        setupProxyPreferences();
     }
 
     private void setupAppLanguagePreferences() {
@@ -82,6 +85,37 @@ public class ContentSettingsFragment extends BasePreferenceFragment {
                         .show();
                 return true;
             });
+    }
+
+    private void setupProxyPreferences() {
+        final Preference.OnPreferenceChangeListener applyProxyListener = (preference, newValue) -> {
+            // Preferences are persisted after this callback returns true, so we post to the next
+            // main-loop tick to rebuild the downloader with the latest values.
+            new Handler(Looper.getMainLooper()).post(this::applyProxySettings);
+            return true;
+        };
+
+        requirePreference(R.string.proxy_enabled_key)
+                .setOnPreferenceChangeListener(applyProxyListener);
+        requirePreference(R.string.proxy_type_key)
+                .setOnPreferenceChangeListener(applyProxyListener);
+        requirePreference(R.string.proxy_host_key)
+                .setOnPreferenceChangeListener(applyProxyListener);
+        requirePreference(R.string.proxy_port_key)
+                .setOnPreferenceChangeListener(applyProxyListener);
+        requirePreference(R.string.proxy_username_key)
+                .setOnPreferenceChangeListener(applyProxyListener);
+        requirePreference(R.string.proxy_password_key)
+                .setOnPreferenceChangeListener(applyProxyListener);
+    }
+
+    private void applyProxySettings() {
+        final Context context = getContext();
+        if (context == null) {
+            Log.w(TAG, "applyProxySettings: null context");
+            return;
+        }
+        DownloaderImpl.getInstance().updateNetworkConfiguration(context);
     }
 
     @Override

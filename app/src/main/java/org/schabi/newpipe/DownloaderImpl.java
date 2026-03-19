@@ -1,6 +1,7 @@
 package org.schabi.newpipe;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -14,15 +15,21 @@ import org.schabi.newpipe.extractor.exceptions.ReCaptchaException;
 import org.schabi.newpipe.util.InfoCache;
 
 import java.io.IOException;
+import java.net.Authenticator;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
+import java.net.Proxy;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
 import okhttp3.RequestBody;
 import okhttp3.ResponseBody;
@@ -37,7 +44,7 @@ public final class DownloaderImpl extends Downloader {
 
     private static DownloaderImpl instance;
     private final Map<String, String> mCookies;
-    private final OkHttpClient client;
+    private volatile OkHttpClient client;
 
     private DownloaderImpl(final OkHttpClient.Builder builder) {
         this.client = builder
@@ -67,6 +74,190 @@ public final class DownloaderImpl extends Downloader {
 
     public static DownloaderImpl getInstance() {
         return instance;
+    }
+
+    public synchronized void updateNetworkConfiguration(@NonNull final Context context) {
+        final SharedPreferences preferences =
+                PreferenceManager.getDefaultSharedPreferences(context);
+
+        final boolean proxyEnabled =
+                preferences.getBoolean(context.getString(R.string.proxy_enabled_key), false);
+
+        final OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .readTimeout(30, TimeUnit.SECONDS);
+
+        Proxy configuredProxy = null;
+        String configuredProxyUser = null;
+        String configuredProxyPassword = null;
+        String configuredProxyHost = null;
+        int configuredProxyPort = -1;
+
+        if (proxyEnabled) {
+            final String rawHost = preferences.getString(
+                    context.getString(R.string.proxy_host_key), "");
+            final String host = normalizeHost(rawHost);
+            final String rawPort = preferences.getString(
+                    context.getString(R.string.proxy_port_key),
+                    context.getString(R.string.proxy_port_default));
+            final Integer port = parsePort(rawPort);
+
+            if (host != null && port != null) {
+                final String proxyType = preferences.getString(
+                        context.getString(R.string.proxy_type_key),
+                        context.getString(R.string.proxy_type_http_value));
+                final String normalizedType = proxyType == null
+                        ? context.getString(R.string.proxy_type_http_value)
+                        : proxyType.trim().toLowerCase(Locale.US);
+
+                final Proxy.Type type = context.getString(R.string.proxy_type_socks5_value)
+                        .equals(normalizedType)
+                        ? Proxy.Type.SOCKS
+                        : Proxy.Type.HTTP;
+                final Proxy proxy = new Proxy(type, new InetSocketAddress(host, port));
+                builder.proxy(proxy);
+                configuredProxy = proxy;
+                configuredProxyHost = host;
+                configuredProxyPort = port;
+
+                final String username = normalizeHost(preferences.getString(
+                        context.getString(R.string.proxy_username_key), ""));
+                final String password = preferences.getString(
+                        context.getString(R.string.proxy_password_key), "");
+
+                if (username != null) {
+                    final String normalizedPassword = password == null ? "" : password;
+                    configuredProxyUser = username;
+                    configuredProxyPassword = normalizedPassword;
+                    if (type == Proxy.Type.HTTP) {
+                        builder.proxyAuthenticator((route, response) -> {
+                            if (response.request().header("Proxy-Authorization") != null) {
+                                return null;
+                            }
+                            return response.request().newBuilder()
+                                    .header("Proxy-Authorization",
+                                            Credentials.basic(username, normalizedPassword))
+                                    .build();
+                        });
+                    }
+                }
+            }
+        }
+
+        applyJvmProxySystemSettings(configuredProxy, configuredProxyHost, configuredProxyPort,
+                configuredProxyUser, configuredProxyPassword);
+        this.client = builder.build();
+    }
+
+    private static void applyJvmProxySystemSettings(@Nullable final Proxy proxy,
+                                                    @Nullable final String host,
+                                                    final int port,
+                                                    @Nullable final String username,
+                                                    @Nullable final String password) {
+        // Clear previously configured proxy settings first.
+        clearProperty("http.proxyHost");
+        clearProperty("http.proxyPort");
+        clearProperty("https.proxyHost");
+        clearProperty("https.proxyPort");
+        clearProperty("socksProxyHost");
+        clearProperty("socksProxyPort");
+        clearProperty("java.net.socks.username");
+        clearProperty("java.net.socks.password");
+        clearProperty("jdk.http.auth.tunneling.disabledSchemes");
+        clearProperty("jdk.http.auth.proxying.disabledSchemes");
+
+        if (proxy == null || host == null || port <= 0) {
+            Authenticator.setDefault(null);
+            return;
+        }
+
+        if (proxy.type() == Proxy.Type.SOCKS) {
+            System.setProperty("socksProxyHost", host);
+            System.setProperty("socksProxyPort", Integer.toString(port));
+            if (username != null) {
+                System.setProperty("java.net.socks.username", username);
+                System.setProperty("java.net.socks.password", password == null ? "" : password);
+            }
+        } else {
+            System.setProperty("http.proxyHost", host);
+            System.setProperty("http.proxyPort", Integer.toString(port));
+            System.setProperty("https.proxyHost", host);
+            System.setProperty("https.proxyPort", Integer.toString(port));
+            // Some HttpURLConnection implementations disable Basic auth for CONNECT by default.
+            System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
+            System.setProperty("jdk.http.auth.proxying.disabledSchemes", "");
+        }
+
+        if (username == null) {
+            Authenticator.setDefault(null);
+            return;
+        }
+
+        final String authUser = username;
+        final String authPassword = password == null ? "" : password;
+        // Some Android/JDK stacks can report a different requestor type during CONNECT-based
+        // proxy authentication. Keep the decision conservative: only return credentials when
+        // it looks like a proxy challenge.
+        final String proxyHostForAuth = host;
+        final int proxyPortForAuth = port;
+        Authenticator.setDefault(new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                if (getRequestorType() == RequestorType.PROXY) {
+                    return new PasswordAuthentication(authUser, authPassword.toCharArray());
+                }
+
+                // Fallback for stacks that report another requestor type (often TARGET) during
+                // CONNECT proxy auth challenges.
+                final String requestingHost = getRequestingHost();
+                final int requestingPort = getRequestingPort();
+
+                final boolean requestingHostMatchesProxy =
+                        requestingHost != null
+                                && proxyHostForAuth != null
+                                && requestingHost.equalsIgnoreCase(proxyHostForAuth);
+                final boolean requestingPortMatchesProxy = requestingPort == proxyPortForAuth;
+
+                if (requestingHostMatchesProxy || requestingPortMatchesProxy) {
+                    return new PasswordAuthentication(authUser, authPassword.toCharArray());
+                }
+
+                return null;
+            }
+        });
+    }
+
+    private static void clearProperty(@NonNull final String key) {
+        System.clearProperty(key);
+    }
+
+    @Nullable
+    private static String normalizeHost(@Nullable final String value) {
+        if (value == null) {
+            return null;
+        }
+        String host = value.trim();
+        if (host.isEmpty()) {
+            return null;
+        }
+        host = host.replaceFirst("^https?://", "");
+        final int slashIndex = host.indexOf('/');
+        if (slashIndex >= 0) {
+            host = host.substring(0, slashIndex);
+        }
+        return host.isEmpty() ? null : host;
+    }
+
+    @Nullable
+    private static Integer parsePort(@Nullable final String rawPort) {
+        if (rawPort == null) {
+            return null;
+        }
+        try {
+            final int port = Integer.parseInt(rawPort.trim());
+            return port >= 1 && port <= 65535 ? port : null;
+        } catch (final NumberFormatException ignored) {
+            return null;
+        }
     }
 
     public String getCookies(final String url) {
@@ -158,7 +349,7 @@ public final class DownloaderImpl extends Downloader {
         });
 
         try (
-                okhttp3.Response response = client.newCall(requestBuilder.build()).execute()
+                okhttp3.Response response = getClient().newCall(requestBuilder.build()).execute()
         ) {
             if (response.code() == 429) {
                 throw new ReCaptchaException("reCaptcha Challenge requested", url);

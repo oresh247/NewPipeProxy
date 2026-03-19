@@ -137,6 +137,7 @@ open class App :
 
     protected open fun getDownloader(): Downloader {
         val downloader = DownloaderImpl.init(null)
+        downloader.updateNetworkConfiguration(this)
         setCookiesToDownloader(downloader)
         return downloader
     }

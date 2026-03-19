@@ -15,6 +15,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven(url = "https://central.sonatype.com/repository/maven-snapshots/")
         maven(url = "https://jitpack.io")
         maven(url = "https://repo.clojars.org")
     }
