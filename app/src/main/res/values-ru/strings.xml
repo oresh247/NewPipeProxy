@@ -691,6 +691,8 @@
     <string name="error_report_notification_toast">Произошла ошибка, подробнее в уведомлении</string>
     <string name="show_error_snackbar">Показать снэк-бар с ошибкой</string>
     <string name="create_error_notification">Показать уведомление об ошибке</string>
+    <string name="show_error_notifications">Показать уведомления об ошибке</string>
+    <string name="show_error_notifications_summary">Если выключено, отчёты об ошибках не будут показываться (snackbar/notification/ErrorActivity).</string>
     <string name="no_appropriate_file_manager_message">Не найден подходящий для этого действия файловый менеджер.
 \nУстановите файловый менеджер, или попробуйте отключить \'%s\' в настройках загрузок</string>
     <string name="no_appropriate_file_manager_message_android_10">Не найден подходящий для этого действия файловый менеджер.

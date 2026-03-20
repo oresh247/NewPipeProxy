@@ -53,6 +53,14 @@
         app:singleLineTitle="false"
         app:iconSpaceReserved="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="@string/show_error_notifications_key"
+        android:title="@string/show_error_notifications"
+        android:summary="@string/show_error_notifications_summary"
+        app:singleLineTitle="false"
+        app:iconSpaceReserved="false" />
+
     <Preference
         android:key="@string/show_error_snackbar_key"
         android:title="@string/show_error_snackbar"

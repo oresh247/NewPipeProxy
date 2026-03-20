@@ -31,6 +31,10 @@ import org.schabi.newpipe.R
 class ErrorUtil {
     companion object {
         private const val ERROR_REPORT_NOTIFICATION_ID = 5340681
+        private fun isErrorNotificationsEnabled(context: Context): Boolean {
+            return PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(context.getString(R.string.show_error_notifications_key), true)
+        }
 
         /**
          * Starts a new error activity allowing the user to report the provided error. Only use this
@@ -45,6 +49,7 @@ class ErrorUtil {
          */
         @JvmStatic
         fun openActivity(context: Context, errorInfo: ErrorInfo) {
+            if (!isErrorNotificationsEnabled(context)) return
             if (PreferenceManager.getDefaultSharedPreferences(context)
                     .getBoolean(MainActivity.KEY_IS_IN_BACKGROUND, true)
             ) {
@@ -115,6 +120,7 @@ class ErrorUtil {
          */
         @JvmStatic
         fun createNotification(context: Context, errorInfo: ErrorInfo) {
+            if (!isErrorNotificationsEnabled(context)) return
             val notificationBuilder: NotificationCompat.Builder =
                 NotificationCompat.Builder(
                     context,
@@ -155,6 +161,7 @@ class ErrorUtil {
         }
 
         private fun showSnackbar(context: Context, rootView: View?, errorInfo: ErrorInfo) {
+            if (!isErrorNotificationsEnabled(context)) return
             if (rootView == null) {
                 // fallback to showing a notification if no root view is available
                 createNotification(context, errorInfo)

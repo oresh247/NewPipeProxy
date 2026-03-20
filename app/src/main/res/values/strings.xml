@@ -500,6 +500,8 @@
     <string name="crash_the_app">Crash the app</string>
     <string name="show_error_snackbar">Show an error snackbar</string>
     <string name="create_error_notification">Create an error notification</string>
+    <string name="show_error_notifications">Показать уведомления об ошибке</string>
+    <string name="show_error_notifications_summary">Если выключено, отчёты об ошибках не будут показываться (snackbar/notification/ErrorActivity).</string>
     <!-- Subscriptions import/export -->
     <plurals name="export_subscriptions">
         <item quantity="one">Exporting %d subscription…</item>
