@@ -34,7 +34,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.TooltipCompat;
-import androidx.collection.SparseArrayCompat;
 import androidx.core.text.HtmlCompat;
 import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.ItemTouchHelper;
@@ -52,13 +51,12 @@ import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.ListExtractor;
 import org.schabi.newpipe.extractor.MetaInfo;
 import org.schabi.newpipe.extractor.NewPipe;
+import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.Page;
 import org.schabi.newpipe.extractor.StreamingService;
 import org.schabi.newpipe.extractor.exceptions.ParsingException;
 import org.schabi.newpipe.extractor.search.SearchExtractor;
 import org.schabi.newpipe.extractor.search.SearchInfo;
-import org.schabi.newpipe.extractor.services.peertube.linkHandler.PeertubeSearchQueryHandlerFactory;
-import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory;
 import org.schabi.newpipe.fragments.BackPressable;
 import org.schabi.newpipe.fragments.list.BaseListFragment;
 import org.schabi.newpipe.ktx.AnimationType;
@@ -70,6 +68,7 @@ import org.schabi.newpipe.util.DeviceUtils;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.KeyboardUtil;
 import org.schabi.newpipe.util.NavigationHelper;
+import org.schabi.newpipe.search.YoutubeSearchExtras;
 import org.schabi.newpipe.util.ServiceHelper;
 
 import java.util.ArrayList;
@@ -108,9 +107,6 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
     private final PublishSubject<String> suggestionPublisher = PublishSubject.create();
 
     @State
-    int filterItemCheckedId = -1;
-
-    @State
     protected int serviceId = Constants.NO_SERVICE_ID;
 
     // these three represents the current search query
@@ -126,6 +122,14 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
 
     @State
     String sortFilter;
+
+    /** Invidious/YouTube upload-date filter ordinal; only used for {@link ServiceList#YouTube}. */
+    @State
+    int youtubeUploadDateOrdinal = 0;
+
+    /** Invidious/YouTube duration filter ordinal; only used for {@link ServiceList#YouTube}. */
+    @State
+    int youtubeSearchDurationOrdinal = 0;
 
     // these represents the last search
     @State
@@ -143,7 +147,6 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
     @State
     boolean wasSearchFocused = false;
 
-    private final SparseArrayCompat<String> menuItemToFilterName = new SparseArrayCompat<>();
     private StreamingService service;
     @Nullable
     private Page nextPage;
@@ -212,6 +215,28 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
     }
 
     @Override
+    public void onCreate(@Nullable final Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getParentFragmentManager().setFragmentResultListener(
+                SearchFilterBottomSheetDialogFragment.REQUEST_KEY,
+                this,
+                (requestKey, result) -> {
+                    final String filter = result.getString(
+                            SearchFilterBottomSheetDialogFragment.RESULT_FILTER);
+                    if (result.containsKey(
+                            SearchFilterBottomSheetDialogFragment.RESULT_YT_UPLOAD)) {
+                        youtubeUploadDateOrdinal = result.getInt(
+                                SearchFilterBottomSheetDialogFragment.RESULT_YT_UPLOAD);
+                        youtubeSearchDurationOrdinal = result.getInt(
+                                SearchFilterBottomSheetDialogFragment.RESULT_YT_DURATION);
+                    }
+                    if (!TextUtils.isEmpty(filter)) {
+                        applyContentFilter(filter);
+                    }
+                });
+    }
+
+    @Override
     public View onCreateView(final LayoutInflater inflater, @Nullable final ViewGroup container,
                              @Nullable final Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_search, container, false);
@@ -225,11 +250,7 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
         updateService();
         // Add the service name to search string hint
         // to make it more obvious which platform is being searched.
-        if (service != null) {
-            searchEditText.setHint(
-                    getString(R.string.search_with_service_name,
-                            service.getServiceInfo().getName()));
-        }
+        updateSearchHintForContentFilter();
         showSearchOnStart();
         initSearchListeners();
     }
@@ -442,59 +463,96 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
             supportActionBar.setDisplayHomeAsUpEnabled(true);
         }
 
-        int itemId = 0;
-        boolean isFirstItem = true;
-        final Context c = getContext();
-
         if (service == null) {
             Log.w(TAG, "onCreateOptionsMenu() called with null service");
             updateService();
         }
 
-        for (final String filter : service.getSearchQHFactory().getAvailableContentFilter()) {
-            if (filter.equals(YoutubeSearchQueryHandlerFactory.MUSIC_SONGS)) {
-                final MenuItem musicItem = menu.add(2,
-                        itemId++,
-                        0,
-                        "YouTube Music");
-                musicItem.setEnabled(false);
-            } else if (filter.equals(PeertubeSearchQueryHandlerFactory.SEPIA_VIDEOS)) {
-                final MenuItem sepiaItem = menu.add(2,
-                        itemId++,
-                        0,
-                        "Sepia Search");
-                sepiaItem.setEnabled(false);
-            }
-            menuItemToFilterName.put(itemId, filter);
-            final MenuItem item = menu.add(1,
-                    itemId++,
-                    0,
-                    ServiceHelper.getTranslatedFilterString(filter, c));
-            if (isFirstItem) {
-                item.setChecked(true);
-                isFirstItem = false;
-            }
+        inflater.inflate(R.menu.menu_search_fragment, menu);
+        final MenuItem filterItem = menu.findItem(R.id.menu_item_search_filters);
+        if (filterItem != null && service != null) {
+            final String[] filters = service.getSearchQHFactory().getAvailableContentFilter();
+            filterItem.setVisible(filters != null && filters.length > 0);
         }
-        menu.setGroupCheckable(1, true, true);
-
-        restoreFilterChecked(menu, filterItemCheckedId);
     }
 
     @Override
     public boolean onOptionsItemSelected(@NonNull final MenuItem item) {
-        final var filter = Collections.singletonList(menuItemToFilterName.get(item.getItemId()));
-        changeContentFilter(item, filter);
-        return true;
+        if (item.getItemId() == R.id.menu_item_search_filters) {
+            openSearchFilterSheet();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
-    private void restoreFilterChecked(final Menu menu, final int itemId) {
-        if (itemId != -1) {
-            final MenuItem item = menu.findItem(itemId);
-            if (item == null) {
-                return;
-            }
+    private void openSearchFilterSheet() {
+        if (service == null) {
+            updateService();
+        }
+        if (service == null) {
+            return;
+        }
+        final String[] filters = service.getSearchQHFactory().getAvailableContentFilter();
+        if (filters == null || filters.length == 0) {
+            return;
+        }
+        SearchFilterBottomSheetDialogFragment.show(
+                getParentFragmentManager(),
+                filters,
+                getSelectedContentFilterKey(),
+                serviceId,
+                youtubeUploadDateOrdinal,
+                youtubeSearchDurationOrdinal);
+    }
 
-            item.setChecked(true);
+    @NonNull
+    private String getSelectedContentFilterKey() {
+        if (contentFilter != null && contentFilter.length > 0
+                && !TextUtils.isEmpty(contentFilter[0])) {
+            return contentFilter[0];
+        }
+        return "";
+    }
+
+    private void applyContentFilter(@NonNull final String filterId) {
+        contentFilter = new String[]{filterId};
+        updateSearchHintForContentFilter();
+
+        if (!TextUtils.isEmpty(searchString)) {
+            search(searchString, contentFilter, sortFilter);
+        }
+    }
+
+    @Nullable
+    private YoutubeSearchExtras buildYoutubeSearchExtrasForRequest() {
+        if (serviceId != ServiceList.YouTube.getServiceId()) {
+            return null;
+        }
+        if (youtubeUploadDateOrdinal <= 0 && youtubeSearchDurationOrdinal <= 0) {
+            return null;
+        }
+        return new YoutubeSearchExtras(youtubeUploadDateOrdinal, youtubeSearchDurationOrdinal);
+    }
+
+    private void updateSearchHintForContentFilter() {
+        if (service == null || searchEditText == null) {
+            return;
+        }
+        final Context c = getContext();
+        if (c == null) {
+            return;
+        }
+        final boolean isNotFiltered = contentFilter == null || contentFilter.length == 0
+                || TextUtils.isEmpty(contentFilter[0])
+                || "all".equals(contentFilter[0]);
+        if (isNotFiltered) {
+            searchEditText.setHint(
+                    getString(R.string.search_with_service_name,
+                            service.getServiceInfo().getName()));
+        } else {
+            searchEditText.setHint(getString(R.string.search_with_service_name_and_filter,
+                    service.getServiceInfo().getName(),
+                    ServiceHelper.getTranslatedFilterString(contentFilter[0], c)));
         }
     }
 
@@ -889,7 +947,8 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
         searchDisposable = ExtractorHelper.searchFor(serviceId,
                 searchString,
                 Arrays.asList(contentFilter),
-                sortFilter)
+                sortFilter,
+                buildYoutubeSearchExtrasForRequest())
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .doOnEvent((searchResult, throwable) -> isLoading.set(false))
@@ -956,31 +1015,6 @@ public class SearchFragment extends BaseListFragment<SearchInfo, ListExtractor.I
     /*//////////////////////////////////////////////////////////////////////////
     // Utils
     //////////////////////////////////////////////////////////////////////////*/
-
-    private void changeContentFilter(final MenuItem item, final List<String> theContentFilter) {
-        filterItemCheckedId = item.getItemId();
-        item.setChecked(true);
-
-        if (service != null) {
-            final boolean isNotFiltered = theContentFilter.isEmpty()
-                    || "all".equals(theContentFilter.get(0));
-            if (isNotFiltered) {
-                searchEditText.setHint(
-                        getString(R.string.search_with_service_name,
-                                service.getServiceInfo().getName()));
-            } else {
-                searchEditText.setHint(getString(R.string.search_with_service_name_and_filter,
-                        service.getServiceInfo().getName(),
-                        item.getTitle()));
-            }
-        }
-
-        contentFilter = theContentFilter.toArray(new String[0]);
-
-        if (!TextUtils.isEmpty(searchString)) {
-            search(searchString, contentFilter, sortFilter);
-        }
-    }
 
     private void setQuery(final int theServiceId,
                           final String theSearchString,

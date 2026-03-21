@@ -38,6 +38,7 @@
     <dimen name="video_item_grid_thumbnail_image_height">92dp</dimen>
 
     <dimen name="channel_item_card_thumbnail_image_size">100dp</dimen>
+    <dimen name="subscription_new_content_dot_size">10dp</dimen>
     <dimen name="channel_item_grid_thumbnail_image_size">92dp</dimen>
     <dimen name="channel_item_grid_min_width">128dp</dimen>
     <!-- Calculated: 2*video_item_search_padding + video_item_search_thumbnail_image_height -->

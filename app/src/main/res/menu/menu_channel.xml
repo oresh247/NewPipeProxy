@@ -27,6 +27,15 @@
         tools:visible="true" />
 
     <item
+        android:id="@+id/menu_item_mark_feed_watched"
+        android:icon="@drawable/ic_done"
+        android:orderInCategory="1"
+        android:title="@string/mark_subscription_feed_watched"
+        android:visible="false"
+        app:showAsAction="never"
+        tools:visible="true" />
+
+    <item
         android:id="@+id/action_settings"
         android:orderInCategory="2"
         android:title="@string/settings"

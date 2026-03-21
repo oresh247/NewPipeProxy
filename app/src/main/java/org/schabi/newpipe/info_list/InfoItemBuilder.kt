@@ -17,4 +17,7 @@ class InfoItemBuilder(val context: Context) {
     var onChannelSelectedListener: OnClickGesture<ChannelInfoItem>? = null
     var onPlaylistSelectedListener: OnClickGesture<PlaylistInfoItem>? = null
     var onCommentsSelectedListener: OnClickGesture<CommentsInfoItem>? = null
+
+    /** Stream keys ([org.schabi.newpipe.util.FeedStreamKeyUtil.key]) marked "new in local feed". */
+    var newInFeedStreamKeys: Set<String> = emptySet()
 }

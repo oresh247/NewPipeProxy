@@ -33,6 +33,19 @@ public abstract class BasePreferenceFragment extends PreferenceFragmentCompat {
                 SettingsResourceRegistry.getInstance().getPreferencesResId(this.getClass()));
     }
 
+    /**
+     * For nested {@link androidx.preference.PreferenceScreen} fragments: root XML
+     * {@link androidx.preference.PreferenceScreen} must use the same {@code android:key} as the
+     * parent screen that opens this fragment.
+     *
+     * @param rootKey key passed to {@link PreferenceFragmentCompat#onCreatePreferences}; must match
+     *                the opening {@link PreferenceScreen}'s {@code android:key}
+     */
+    protected void setPreferencesFromResourceRegistry(@Nullable final String rootKey) {
+        final int resId = SettingsResourceRegistry.getInstance().getPreferencesResId(getClass());
+        setPreferencesFromResource(resId, rootKey);
+    }
+
     @Override
     public void onViewCreated(@NonNull final View rootView,
                               @Nullable final Bundle savedInstanceState) {

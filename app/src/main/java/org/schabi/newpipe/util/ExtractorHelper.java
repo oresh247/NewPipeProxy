@@ -47,10 +47,14 @@ import org.schabi.newpipe.extractor.comments.CommentsInfoItem;
 import org.schabi.newpipe.extractor.kiosk.KioskInfo;
 import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler;
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo;
+import org.schabi.newpipe.extractor.search.SearchExtractor;
 import org.schabi.newpipe.extractor.search.SearchInfo;
+import org.schabi.newpipe.extractor.ServiceList;
+import org.schabi.newpipe.extractor.services.youtube.extractors.ExtendedYoutubeSearchExtractor;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
 import org.schabi.newpipe.extractor.suggestion.SuggestionExtractor;
+import org.schabi.newpipe.search.YoutubeSearchExtras;
 import org.schabi.newpipe.util.text.TextLinkifier;
 
 import java.util.Collections;
@@ -77,12 +81,43 @@ public final class ExtractorHelper {
     public static Single<SearchInfo> searchFor(final int serviceId, final String searchString,
                                                final List<String> contentFilter,
                                                final String sortFilter) {
+        return searchFor(serviceId, searchString, contentFilter, sortFilter, null);
+    }
+
+    /**
+     * Same as {@link #searchFor(int, String, List, String)} with optional YouTube-only filters.
+     *
+     * @param serviceId     streaming service id
+     * @param searchString  query text
+     * @param contentFilter content type filters (e.g. videos, channels)
+     * @param sortFilter    service-specific sort filter
+     * @param youtubeExtras upload date / duration for YouTube InnerTube {@code params}, or null
+     * @return cold single that loads {@link SearchInfo}
+     */
+    public static Single<SearchInfo> searchFor(final int serviceId, final String searchString,
+                                               final List<String> contentFilter,
+                                               final String sortFilter,
+                                               @Nullable final YoutubeSearchExtras
+                                                       youtubeExtras) {
         checkServiceId(serviceId);
-        return Single.fromCallable(() ->
-                SearchInfo.getInfo(NewPipe.getService(serviceId),
-                        NewPipe.getService(serviceId)
-                                .getSearchQHFactory()
-                                .fromQuery(searchString, contentFilter, sortFilter)));
+        return Single.fromCallable(() -> {
+            final var service = NewPipe.getService(serviceId);
+            final var qh = service.getSearchQHFactory()
+                    .fromQuery(searchString, contentFilter, sortFilter);
+            final String firstFilter = contentFilter.isEmpty() ? null : contentFilter.get(0);
+            final boolean musicSearch = firstFilter != null && firstFilter.startsWith("music_");
+            final boolean useYoutubeExtras = serviceId == ServiceList.YouTube.getServiceId()
+                    && youtubeExtras != null
+                    && youtubeExtras.affectsYoutubeParams()
+                    && !musicSearch;
+            if (useYoutubeExtras) {
+                final SearchExtractor ex = new ExtendedYoutubeSearchExtractor(
+                        service, qh, youtubeExtras);
+                ex.fetchPage();
+                return SearchInfo.getInfo(ex);
+            }
+            return SearchInfo.getInfo(service, qh);
+        });
     }
 
     public static Single<InfoItemsPage<InfoItem>> getMoreSearchItems(

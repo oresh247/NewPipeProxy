@@ -184,54 +184,20 @@
             app:iconSpaceReserved="false" />
 
         <ListPreference
-            android:defaultValue="@string/proxy_type_http_value"
-            android:entries="@array/proxy_type_entries"
-            android:entryValues="@array/proxy_type_entry_values"
-            android:key="@string/proxy_type_key"
-            android:summary="@string/proxy_type_summary"
-            android:title="@string/proxy_type_title"
-            app:singleLineTitle="false"
+            android:key="@string/proxy_active_profile_id_key"
+            android:summary="@string/proxy_active_profile_summary"
+            android:title="@string/proxy_active_profile_title"
             app:iconSpaceReserved="false"
+            app:singleLineTitle="false"
             app:useSimpleSummaryProvider="true" />
 
-        <EditTextPreference
-            android:defaultValue=""
-            android:inputType="textNoSuggestions|textUri"
-            android:key="@string/proxy_host_key"
-            android:summary="@string/proxy_host_summary"
-            android:title="@string/proxy_host_title"
-            app:singleLineTitle="false"
+        <PreferenceScreen
+            android:key="@string/proxy_manage_profiles_screen_key"
+            android:fragment="org.schabi.newpipe.settings.ProxyProfilesFragment"
+            android:summary="@string/proxy_manage_profiles_summary"
+            android:title="@string/proxy_manage_profiles_title"
             app:iconSpaceReserved="false"
-            app:useSimpleSummaryProvider="true" />
-
-        <EditTextPreference
-            android:defaultValue="@string/proxy_port_default"
-            android:inputType="number"
-            android:key="@string/proxy_port_key"
-            android:summary="@string/proxy_port_summary"
-            android:title="@string/proxy_port_title"
-            app:singleLineTitle="false"
-            app:iconSpaceReserved="false"
-            app:useSimpleSummaryProvider="true" />
-
-        <EditTextPreference
-            android:defaultValue=""
-            android:inputType="textNoSuggestions"
-            android:key="@string/proxy_username_key"
-            android:summary="@string/proxy_username_summary"
-            android:title="@string/proxy_username_title"
-            app:singleLineTitle="false"
-            app:iconSpaceReserved="false"
-            app:useSimpleSummaryProvider="true" />
-
-        <EditTextPreference
-            android:defaultValue=""
-            android:inputType="textPassword"
-            android:key="@string/proxy_password_key"
-            android:summary="@string/proxy_password_summary"
-            android:title="@string/proxy_password_title"
-            app:singleLineTitle="false"
-            app:iconSpaceReserved="false" />
+            app:singleLineTitle="false" />
 
     </PreferenceCategory>
 </PreferenceScreen>

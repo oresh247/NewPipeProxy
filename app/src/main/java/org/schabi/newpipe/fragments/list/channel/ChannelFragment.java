@@ -35,7 +35,6 @@ import org.schabi.newpipe.database.subscription.NotificationMode;
 import org.schabi.newpipe.database.subscription.SubscriptionEntity;
 import org.schabi.newpipe.databinding.FragmentChannelBinding;
 import org.schabi.newpipe.error.ErrorInfo;
-import org.schabi.newpipe.error.ErrorUtil;
 import org.schabi.newpipe.error.UserAction;
 import org.schabi.newpipe.extractor.channel.ChannelInfo;
 import org.schabi.newpipe.extractor.exceptions.ContentNotSupportedException;
@@ -43,6 +42,8 @@ import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler;
 import org.schabi.newpipe.fragments.BaseStateFragment;
 import org.schabi.newpipe.fragments.detail.TabAdapter;
 import org.schabi.newpipe.ktx.AnimationType;
+import org.schabi.newpipe.error.ErrorUtil;
+import org.schabi.newpipe.local.feed.FeedDatabaseManager;
 import org.schabi.newpipe.local.feed.notifications.NotificationHelper;
 import org.schabi.newpipe.local.subscription.SubscriptionManager;
 import org.schabi.newpipe.util.ChannelTabHelper;
@@ -99,7 +100,9 @@ public class ChannelFragment extends BaseStateFragment<ChannelInfo>
 
     private MenuItem menuRssButton;
     private MenuItem menuNotifyButton;
+    private MenuItem menuMarkFeedWatchedButton;
     private SubscriptionEntity channelSubscription;
+    private FeedDatabaseManager feedDatabaseManager;
     private MenuProvider menuProvider;
 
     public static ChannelFragment getInstance(final int serviceId, final String url,
@@ -124,6 +127,7 @@ public class ChannelFragment extends BaseStateFragment<ChannelInfo>
     public void onAttach(@NonNull final Context context) {
         super.onAttach(context);
         subscriptionManager = new SubscriptionManager(activity);
+        feedDatabaseManager = new FeedDatabaseManager(activity);
     }
 
     @Override
@@ -154,8 +158,10 @@ public class ChannelFragment extends BaseStateFragment<ChannelInfo>
                 public void onPrepareMenu(@NonNull final Menu menu) {
                     menuRssButton = menu.findItem(R.id.menu_item_rss);
                     menuNotifyButton = menu.findItem(R.id.menu_item_notify);
+                    menuMarkFeedWatchedButton = menu.findItem(R.id.menu_item_mark_feed_watched);
                     updateRssButton();
                     updateNotifyButton(channelSubscription);
+                    updateMarkFeedWatchedButton();
                 }
 
                 @Override
@@ -181,6 +187,8 @@ public class ChannelFragment extends BaseStateFragment<ChannelInfo>
                             ShareUtils.shareText(requireContext(), name,
                                     currentInfo.getOriginalUrl(), currentInfo.getAvatars());
                         }
+                    } else if (itemId == R.id.menu_item_mark_feed_watched) {
+                        markSubscriptionFeedWatched();
                     } else {
                         return false;
                     }
@@ -372,6 +380,7 @@ public class ChannelFragment extends BaseStateFragment<ChannelInfo>
                 subscribeButtonMonitor =
                         monitorSubscribeButton(mapOnUnsubscribe(channelSubscription));
             }
+            requireActivity().invalidateMenu();
         };
     }
 
@@ -433,6 +442,37 @@ public class ChannelFragment extends BaseStateFragment<ChannelInfo>
         menuNotifyButton.setVisible(subscription != null);
     }
 
+    private void updateMarkFeedWatchedButton() {
+        if (menuMarkFeedWatchedButton == null) {
+            return;
+        }
+        menuMarkFeedWatchedButton.setVisible(channelSubscription != null);
+    }
+
+    private void markSubscriptionFeedWatched() {
+        if (channelSubscription == null || binding == null) {
+            return;
+        }
+        disposables.add(
+                feedDatabaseManager
+                        .markAllFeedStreamsPlayedForSubscription(channelSubscription.getUid())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe(
+                                count -> {
+                                    final String message = count == 0
+                                            ? getString(
+                                            R.string.subscription_feed_marked_watched_none)
+                                            : getString(
+                                            R.string.subscription_feed_marked_watched_count, count);
+                                    Snackbar.make(binding.getRoot(), message, Snackbar.LENGTH_SHORT)
+                                            .show();
+                                },
+                                throwable -> ErrorUtil.showUiErrorSnackbar(
+                                        this, "Mark subscription feed watched", throwable)
+                        )
+        );
+    }
+
     private void setNotify(final boolean isEnabled) {
         disposables.add(
                 subscriptionManager
@@ -473,7 +513,12 @@ public class ChannelFragment extends BaseStateFragment<ChannelInfo>
                 final String tab = linkHandler.getContentFilters().get(0);
                 if (ChannelTabHelper.showChannelTab(context, preferences, tab)) {
                     final ChannelTabFragment channelTabFragment =
-                            ChannelTabFragment.getInstance(serviceId, linkHandler, name);
+                            ChannelTabFragment.getInstance(
+                                    serviceId,
+                                    linkHandler,
+                                    name,
+                                    currentInfo.getUrl(),
+                                    currentInfo.getOriginalUrl());
                     channelTabFragment.useAsFrontPage(useAsFrontPage);
                     tabAdapter.addFragment(channelTabFragment,
                             context.getString(ChannelTabHelper.getTranslationKey(tab)));

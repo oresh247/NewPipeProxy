@@ -5,6 +5,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import org.schabi.newpipe.R;
@@ -15,11 +16,13 @@ import org.schabi.newpipe.info_list.InfoItemBuilder;
 import org.schabi.newpipe.ktx.ViewUtils;
 import org.schabi.newpipe.local.history.HistoryRecordManager;
 import org.schabi.newpipe.util.DependentPreferenceHelper;
+import org.schabi.newpipe.util.FeedStreamKeyUtil;
 import org.schabi.newpipe.util.Localization;
 import org.schabi.newpipe.util.StreamTypeUtil;
 import org.schabi.newpipe.util.image.CoilHelper;
 import org.schabi.newpipe.views.AnimatedProgressBar;
 
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class StreamMiniInfoItemHolder extends InfoItemHolder {
@@ -28,6 +31,8 @@ public class StreamMiniInfoItemHolder extends InfoItemHolder {
     public final TextView itemUploaderView;
     public final TextView itemDurationView;
     private final AnimatedProgressBar itemProgressView;
+    @Nullable
+    private final View itemNewInFeedIndicator;
 
     StreamMiniInfoItemHolder(final InfoItemBuilder infoItemBuilder, final int layoutId,
                              final ViewGroup parent) {
@@ -38,6 +43,7 @@ public class StreamMiniInfoItemHolder extends InfoItemHolder {
         itemUploaderView = itemView.findViewById(R.id.itemUploaderView);
         itemDurationView = itemView.findViewById(R.id.itemDurationView);
         itemProgressView = itemView.findViewById(R.id.itemProgressView);
+        itemNewInFeedIndicator = itemView.findViewById(R.id.itemNewInFeedIndicator);
     }
 
     public StreamMiniInfoItemHolder(final InfoItemBuilder infoItemBuilder, final ViewGroup parent) {
@@ -109,6 +115,8 @@ public class StreamMiniInfoItemHolder extends InfoItemHolder {
                 disableLongClick();
                 break;
         }
+
+        updateNewInFeedIndicator(item);
     }
 
     @Override
@@ -136,6 +144,18 @@ public class StreamMiniInfoItemHolder extends InfoItemHolder {
         } else if (itemProgressView.getVisibility() == View.VISIBLE) {
             ViewUtils.animate(itemProgressView, false, 500);
         }
+
+        updateNewInFeedIndicator(item);
+    }
+
+    private void updateNewInFeedIndicator(final StreamInfoItem item) {
+        if (itemNewInFeedIndicator == null) {
+            return;
+        }
+        final Set<String> keys = itemBuilder.getNewInFeedStreamKeys();
+        final boolean show = keys != null && !keys.isEmpty()
+                && keys.contains(FeedStreamKeyUtil.key(item.getServiceId(), item.getUrl()));
+        itemNewInFeedIndicator.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void enableLongClick(final StreamInfoItem item) {

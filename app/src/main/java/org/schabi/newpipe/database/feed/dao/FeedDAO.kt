@@ -12,7 +12,9 @@ import java.time.OffsetDateTime
 import org.schabi.newpipe.database.feed.model.FeedEntity
 import org.schabi.newpipe.database.feed.model.FeedGroupEntity
 import org.schabi.newpipe.database.feed.model.FeedLastUpdatedEntity
+import org.schabi.newpipe.database.feed.model.FeedStreamNewInFeedRow
 import org.schabi.newpipe.database.stream.StreamWithState
+import org.schabi.newpipe.database.stream.model.StreamEntity
 import org.schabi.newpipe.database.stream.model.StreamStateEntity
 import org.schabi.newpipe.database.subscription.NotificationMode
 import org.schabi.newpipe.database.subscription.SubscriptionEntity
@@ -234,4 +236,93 @@ abstract class FeedDAO {
         outdatedThreshold: OffsetDateTime,
         @NotificationMode notificationMode: Int
     ): Flowable<List<SubscriptionEntity>>
+
+    /**
+     * Subscription ids that have at least one feed stream considered not fully played, using
+     * [stream_state] and stream type only (no [stream_history] join — avoids multi-row join issues
+     * and matches the common case: no state / partial progress / live).
+     */
+    @Query(
+        """
+        SELECT DISTINCT f.subscription_id FROM feed f
+
+        INNER JOIN streams s
+        ON s.uid = f.stream_id
+
+        LEFT JOIN stream_state sst
+        ON s.uid = sst.stream_id
+
+        WHERE (
+            s.stream_type = 'LIVE_STREAM'
+            OR s.stream_type = 'AUDIO_LIVE_STREAM'
+            OR sst.stream_id IS NULL
+            OR (
+                s.duration >= 1
+                AND sst.progress_time < s.duration * 1000 - ${StreamStateEntity.PLAYBACK_FINISHED_END_MILLISECONDS}
+            )
+            OR (
+                s.duration >= 1
+                AND sst.progress_time < s.duration * 1000 * 3 / 4
+            )
+            OR (
+                s.duration < 1
+                AND (
+                    sst.stream_id IS NULL
+                    OR sst.progress_time <= ${StreamStateEntity.PLAYBACK_SAVE_THRESHOLD_START_MILLISECONDS}
+                )
+            )
+        )
+        """
+    )
+    abstract fun getSubscriptionIdsWithNotFullyPlayedFeedStreams(): Flowable<List<Long>>
+
+    @Query(
+        """
+        SELECT s.* FROM streams s
+        INNER JOIN feed f ON s.uid = f.stream_id
+        WHERE f.subscription_id = :subscriptionId
+        """
+    )
+    abstract fun getStreamsForSubscriptionFeed(subscriptionId: Long): List<StreamEntity>
+
+    /**
+     * Streams in [feed] for [subscriptionId] that are still considered not fully played (same rules
+     * as [getSubscriptionIdsWithNotFullyPlayedFeedStreams]).
+     */
+    @Query(
+        """
+        SELECT DISTINCT s.service_id, s.url FROM feed f
+
+        INNER JOIN streams s
+        ON s.uid = f.stream_id
+
+        LEFT JOIN stream_state sst
+        ON s.uid = sst.stream_id
+
+        WHERE f.subscription_id = :subscriptionId
+        AND (
+            s.stream_type = 'LIVE_STREAM'
+            OR s.stream_type = 'AUDIO_LIVE_STREAM'
+            OR sst.stream_id IS NULL
+            OR (
+                s.duration >= 1
+                AND sst.progress_time < s.duration * 1000 - ${StreamStateEntity.PLAYBACK_FINISHED_END_MILLISECONDS}
+            )
+            OR (
+                s.duration >= 1
+                AND sst.progress_time < s.duration * 1000 * 3 / 4
+            )
+            OR (
+                s.duration < 1
+                AND (
+                    sst.stream_id IS NULL
+                    OR sst.progress_time <= ${StreamStateEntity.PLAYBACK_SAVE_THRESHOLD_START_MILLISECONDS}
+                )
+            )
+        )
+        """
+    )
+    abstract fun getNewInFeedStreamKeysForSubscription(
+        subscriptionId: Long
+    ): Flowable<List<FeedStreamNewInFeedRow>>
 }

@@ -8,6 +8,8 @@
         android:id="@+id/items_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:scrollbars="vertical"
         android:visibility="gone"
         tools:listitem="@layout/list_channel_item" />

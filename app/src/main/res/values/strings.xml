@@ -11,12 +11,32 @@
     <string name="no">No</string>
     <string name="open_in_browser">Open in browser</string>
     <string name="mark_as_watched">Mark as watched</string>
+    <string name="mark_subscription_feed_watched">Mark local feed as watched</string>
+    <string name="subscription_feed_marked_watched_none">No saved feed items for this channel</string>
+    <string name="subscription_feed_marked_watched_count">Marked %d feed item(s) as watched</string>
     <string name="open_in_popup_mode">Open in popup mode</string>
     <string name="open_with">Open with</string>
     <string name="share">Share</string>
     <string name="download">Download</string>
     <string name="controls_download_desc">Download stream file</string>
     <string name="search">Search</string>
+    <string name="search_filters">Search filters</string>
+    <string name="search_filters_type">Type</string>
+    <string name="apply">Apply</string>
+    <string name="youtube_music">YouTube Music</string>
+    <string name="sepia_search">Sepia Search</string>
+    <string name="search_filters_upload_date">Upload date</string>
+    <string name="search_filters_duration">Duration</string>
+    <string name="search_upload_any_time">Any time</string>
+    <string name="search_upload_last_hour">Last hour</string>
+    <string name="search_upload_today">Today</string>
+    <string name="search_upload_week">This week</string>
+    <string name="search_upload_month">This month</string>
+    <string name="search_upload_year">This year</string>
+    <string name="search_duration_any">No preference</string>
+    <string name="search_duration_short">Under 4 minutes</string>
+    <string name="search_duration_medium">4–20 minutes</string>
+    <string name="search_duration_long">Over 20 minutes</string>
     <string name="search_with_service_name">Search %1$s</string>
     <string name="search_with_service_name_and_filter">Search %1$s (%2$s)</string>
     <string name="settings">Settings</string>
@@ -941,4 +961,26 @@
         <item>@string/proxy_type_http_value</item>
         <item>@string/proxy_type_socks5_value</item>
     </string-array>
+
+    <string name="proxy_profiles_json_key">proxy_profiles_json</string>
+    <string name="proxy_active_profile_id_key">proxy_active_profile_id</string>
+    <string name="proxy_add_profile_pref_key">proxy_add_profile_pref</string>
+    <string name="proxy_profile_list_category_key">proxy_profile_list_category</string>
+
+    <string name="proxy_profiles_screen_title">Proxy profiles</string>
+    <string name="proxy_manage_profiles_screen_key">manage_proxy_profiles_screen</string>
+    <string name="proxy_manage_profiles_title">Manage proxy profiles</string>
+    <string name="proxy_manage_profiles_summary">Add, edit, or remove saved proxies</string>
+    <string name="proxy_active_profile_title">Active proxy</string>
+    <string name="proxy_active_profile_summary">Used when \"Use proxy\" is enabled</string>
+    <string name="proxy_no_profiles_summary">No profiles yet — add one under Manage proxy profiles</string>
+    <string name="proxy_saved_profiles_title">Saved profiles</string>
+    <string name="proxy_add_profile">Add proxy profile</string>
+    <string name="proxy_edit_profile_title">Edit proxy profile</string>
+    <string name="proxy_profile_name_hint">Name</string>
+    <string name="proxy_default_profile_name">Default</string>
+    <string name="proxy_dialog_save">Save</string>
+    <string name="proxy_dialog_delete">Delete</string>
+    <string name="proxy_delete_confirm_title">Delete this profile?</string>
+    <string name="proxy_type_label">Type</string>
 </resources>

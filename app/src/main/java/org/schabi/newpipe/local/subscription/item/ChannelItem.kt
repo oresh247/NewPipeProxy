@@ -1,6 +1,8 @@
 package org.schabi.newpipe.local.subscription.item
 
 import android.content.Context
+import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import com.xwray.groupie.GroupieViewHolder
@@ -15,9 +17,26 @@ class ChannelItem(
     private val infoItem: ChannelInfoItem,
     private val subscriptionId: Long = -1L,
     var itemVersion: ItemVersion = ItemVersion.NORMAL,
+    private val hasNewFeedContent: Boolean = false,
     var gesturesListener: OnClickGesture<ChannelInfoItem>? = null
 ) : Item<GroupieViewHolder>() {
     override fun getId(): Long = if (subscriptionId == -1L) super.getId() else subscriptionId
+
+    override fun isSameAs(other: Item<*>): Boolean {
+        if (other !is ChannelItem) {
+            return false
+        }
+        return id == other.id && itemVersion == other.itemVersion
+    }
+
+    override fun hasSameContentAs(other: Item<*>): Boolean {
+        if (other !is ChannelItem) {
+            return false
+        }
+        return hasNewFeedContent == other.hasNewFeedContent &&
+            infoItem.name == other.infoItem.name &&
+            subscriptionId == other.subscriptionId
+    }
 
     enum class ItemVersion { NORMAL, MINI, GRID }
 
@@ -40,6 +59,16 @@ class ChannelItem(
         }
 
         CoilHelper.loadAvatar(itemThumbnailView, infoItem.thumbnails)
+
+        viewHolder.root.findViewById<View>(R.id.itemNewContentIndicator)?.let { indicator ->
+            if (hasNewFeedContent) {
+                indicator.visibility = View.VISIBLE
+                indicator.bringToFront()
+                (indicator.parent as? ViewGroup)?.invalidate()
+            } else {
+                indicator.visibility = View.GONE
+            }
+        }
 
         gesturesListener?.run {
             viewHolder.root.setOnClickListener { selected(infoItem) }

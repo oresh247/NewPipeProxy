@@ -36,7 +36,9 @@ import org.schabi.newpipe.util.FallbackViewHolder;
 import org.schabi.newpipe.util.OnClickGesture;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /*
@@ -121,6 +123,18 @@ public class InfoListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
     public void setItemViewMode(final ItemViewMode itemViewMode) {
         this.itemMode = itemViewMode;
+    }
+
+    /**
+     * Highlights stream rows whose key is in the set (channel tab: "new in local feed").
+     * Pass null or empty to clear.
+     *
+     * @param keys serviceId|url keys from the local feed, or null to clear
+     */
+    public void setNewInFeedStreamKeys(@Nullable final Set<String> keys) {
+        infoItemBuilder.setNewInFeedStreamKeys(
+                keys == null ? Collections.emptySet() : keys);
+        notifyDataSetChanged();
     }
 
     public void addInfoItemList(@Nullable final List<? extends InfoItem> data) {

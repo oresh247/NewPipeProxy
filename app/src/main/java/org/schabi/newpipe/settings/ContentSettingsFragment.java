@@ -13,6 +13,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.os.LocaleListCompat;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 
 import org.schabi.newpipe.DownloaderImpl;
@@ -22,7 +23,10 @@ import org.schabi.newpipe.player.helper.PlayerHelper;
 import org.schabi.newpipe.util.Localization;
 import org.schabi.newpipe.util.image.ImageStrategy;
 import org.schabi.newpipe.util.image.PreferredImageQuality;
+import org.schabi.newpipe.settings.proxy.ProxyProfile;
+import org.schabi.newpipe.settings.proxy.ProxyProfileStore;
 
+import java.util.List;
 import java.util.Locale;
 
 import coil3.SingletonImageLoader;
@@ -39,6 +43,7 @@ public class ContentSettingsFragment extends BasePreferenceFragment {
         setupAppLanguagePreferences();
         setupImageQualityPref();
         setupProxyPreferences();
+        updateProxyActiveProfileList();
     }
 
     private void setupAppLanguagePreferences() {
@@ -97,16 +102,62 @@ public class ContentSettingsFragment extends BasePreferenceFragment {
 
         requirePreference(R.string.proxy_enabled_key)
                 .setOnPreferenceChangeListener(applyProxyListener);
-        requirePreference(R.string.proxy_type_key)
-                .setOnPreferenceChangeListener(applyProxyListener);
-        requirePreference(R.string.proxy_host_key)
-                .setOnPreferenceChangeListener(applyProxyListener);
-        requirePreference(R.string.proxy_port_key)
-                .setOnPreferenceChangeListener(applyProxyListener);
-        requirePreference(R.string.proxy_username_key)
-                .setOnPreferenceChangeListener(applyProxyListener);
-        requirePreference(R.string.proxy_password_key)
-                .setOnPreferenceChangeListener(applyProxyListener);
+
+        requirePreference(R.string.proxy_active_profile_id_key)
+                .setOnPreferenceChangeListener((preference, newValue) -> {
+                    new Handler(Looper.getMainLooper()).post(this::applyProxySettings);
+                    return true;
+                });
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        updateProxyActiveProfileList();
+    }
+
+    private void updateProxyActiveProfileList() {
+        final Context context = getContext();
+        if (context == null) {
+            return;
+        }
+        final ListPreference listPref = requirePreference(R.string.proxy_active_profile_id_key);
+        final List<ProxyProfile> profiles = ProxyProfileStore.readProfiles(context);
+        if (profiles.isEmpty()) {
+            listPref.setEnabled(false);
+            listPref.setEntries(new CharSequence[0]);
+            listPref.setEntryValues(new CharSequence[0]);
+            listPref.setSummaryProvider(null);
+            listPref.setSummary(getString(R.string.proxy_no_profiles_summary));
+            return;
+        }
+        listPref.setEnabled(true);
+        final CharSequence[] entries = new CharSequence[profiles.size()];
+        final CharSequence[] values = new CharSequence[profiles.size()];
+        for (int i = 0; i < profiles.size(); i++) {
+            final ProxyProfile p = profiles.get(i);
+            final String label = p.getDisplayName() == null || p.getDisplayName().isEmpty()
+                    ? p.getHost()
+                    : p.getDisplayName();
+            entries[i] = label;
+            values[i] = p.getId();
+        }
+        listPref.setEntries(entries);
+        listPref.setEntryValues(values);
+        final String activeId = ProxyProfileStore.getActiveProfileId(context);
+        if (activeId != null) {
+            for (final CharSequence v : values) {
+                if (activeId.contentEquals(v)) {
+                    listPref.setValue(activeId);
+                    listPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+                    return;
+                }
+            }
+        }
+        final String firstId = profiles.get(0).getId();
+        ProxyProfileStore.setActiveProfileId(context, firstId);
+        listPref.setValue(firstId);
+        listPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
     }
 
     private void applyProxySettings() {

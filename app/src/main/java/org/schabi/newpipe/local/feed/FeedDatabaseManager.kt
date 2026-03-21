@@ -6,6 +6,7 @@ import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Completable
 import io.reactivex.rxjava3.core.Flowable
 import io.reactivex.rxjava3.core.Maybe
+import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.schedulers.Schedulers
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -17,10 +18,13 @@ import org.schabi.newpipe.database.feed.model.FeedGroupEntity
 import org.schabi.newpipe.database.feed.model.FeedLastUpdatedEntity
 import org.schabi.newpipe.database.stream.StreamWithState
 import org.schabi.newpipe.database.stream.model.StreamEntity
+import org.schabi.newpipe.database.stream.model.StreamStateEntity
 import org.schabi.newpipe.database.subscription.NotificationMode
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.StreamType
 import org.schabi.newpipe.local.subscription.FeedGroupIcon
+import org.schabi.newpipe.util.FeedStreamKeyUtil
+import org.schabi.newpipe.util.StreamTypeUtil
 
 class FeedDatabaseManager(context: Context) {
     private val database = NewPipeDatabase.getInstance(context)
@@ -34,9 +38,34 @@ class FeedDatabaseManager(context: Context) {
          */
         val FEED_OLDEST_ALLOWED_DATE: OffsetDateTime = LocalDate.now().minusWeeks(13)
             .atStartOfDay().atOffset(ZoneOffset.UTC)
+
+        /**
+         * Progress (ms) stored for streams with unknown duration so subscription "new" dot logic
+         * treats them as no longer "unstarted" (see FeedDAO threshold).
+         */
+        private const val UNKNOWN_DURATION_FINISHED_PROGRESS_MS: Long = 86_400_000L
     }
 
     fun groups() = feedGroupTable.getAll()
+
+    /**
+     * Emits subscription ids that still have at least one not-fully-played stream in the local feed.
+     */
+    fun subscriptionIdsWithNotFullyPlayedFeedStreams(): Flowable<List<Long>> {
+        return feedTable.getSubscriptionIdsWithNotFullyPlayedFeedStreams()
+    }
+
+    /**
+     * Keys ([FeedStreamKeyUtil.key]) for streams in the local feed for this subscription that still
+     * count as not fully played (same rules as [subscriptionIdsWithNotFullyPlayedFeedStreams]).
+     */
+    fun newInFeedStreamKeysForSubscription(subscriptionId: Long): Flowable<Set<String>> {
+        return feedTable.getNewInFeedStreamKeysForSubscription(subscriptionId)
+            .map { rows ->
+                rows.map { row -> FeedStreamKeyUtil.key(row.serviceId, row.url) }.toSet()
+            }
+            .subscribeOn(Schedulers.io())
+    }
 
     fun database() = database
 
@@ -124,6 +153,36 @@ class FeedDatabaseManager(context: Context) {
                 "clear() → streamTable.deleteOrphans() → $deletedOrphans"
             )
         }
+    }
+
+    /**
+     * Sets playback state to "finished" for all non-live streams linked in the local feed for this
+     * subscription. Live streams are skipped (they still match the subscription-dot query). Runs
+     * even when watch history is disabled so the subscriptions indicator can clear.
+     *
+     * @return count of streams updated
+     */
+    fun markAllFeedStreamsPlayedForSubscription(subscriptionId: Long): Single<Int> {
+        return Single.fromCallable {
+            var updated = 0
+            database.runInTransaction {
+                val streamStateDao = database.streamStateDAO()
+                val streams = feedTable.getStreamsForSubscriptionFeed(subscriptionId)
+                for (stream in streams) {
+                    if (StreamTypeUtil.isLiveStream(stream.streamType)) {
+                        continue
+                    }
+                    val progressMillis = if (stream.duration >= 1) {
+                        stream.duration * 1000
+                    } else {
+                        UNKNOWN_DURATION_FINISHED_PROGRESS_MS
+                    }
+                    streamStateDao.upsert(StreamStateEntity(stream.uid, progressMillis))
+                    updated++
+                }
+            }
+            updated
+        }.subscribeOn(Schedulers.io())
     }
 
     // /////////////////////////////////////////////////////////////////////////

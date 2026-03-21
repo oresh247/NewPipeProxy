@@ -1,6 +1,7 @@
 package org.schabi.newpipe.fragments.list.channel;
 
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -26,15 +27,23 @@ import org.schabi.newpipe.fragments.list.BaseListInfoFragment;
 import org.schabi.newpipe.fragments.list.playlist.PlaylistControlViewHolder;
 import org.schabi.newpipe.player.playqueue.ChannelTabPlayQueue;
 import org.schabi.newpipe.player.playqueue.PlayQueue;
+import org.schabi.newpipe.database.subscription.SubscriptionEntity;
+import org.schabi.newpipe.local.feed.FeedDatabaseManager;
+import org.schabi.newpipe.local.subscription.SubscriptionManager;
 import org.schabi.newpipe.util.ChannelTabHelper;
 import org.schabi.newpipe.util.ExtractorHelper;
 import org.schabi.newpipe.util.PlayButtonHelper;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class ChannelTabFragment extends BaseListInfoFragment<InfoItem, ChannelTabInfo>
         implements PlaylistControlViewHolder {
@@ -44,22 +53,60 @@ public class ChannelTabFragment extends BaseListInfoFragment<InfoItem, ChannelTa
     protected ListLinkHandler tabHandler;
     @State
     protected String channelName;
+    /**
+     * Alternate channel URL for DB lookup when {@link #url} does not match
+     * {@link SubscriptionEntity} (same channel, different URL form).
+     */
+    @State
+    @Nullable
+    protected String subscriptionUrlAlternate;
 
     private PlaylistControlBinding playlistControlBinding;
+
+    private CompositeDisposable newInFeedDisposable;
+    private SubscriptionManager subscriptionManager;
+    private FeedDatabaseManager feedDatabaseManager;
 
     @NonNull
     public static ChannelTabFragment getInstance(final int serviceId,
                                                  final ListLinkHandler tabHandler,
-                                                 final String channelName) {
+                                                 final String channelName,
+                                                 final String channelUrl,
+                                                 @Nullable final String channelUrlAlternate) {
         final ChannelTabFragment instance = new ChannelTabFragment();
         instance.serviceId = serviceId;
         instance.tabHandler = tabHandler;
         instance.channelName = channelName;
+        instance.url = channelUrl;
+        instance.subscriptionUrlAlternate = channelUrlAlternate;
         return instance;
     }
 
     public ChannelTabFragment() {
         super(UserAction.REQUESTED_CHANNEL);
+    }
+
+    /**
+     * Resolves the subscription row using {@link #url}, then optionally
+     * {@link #subscriptionUrlAlternate}, so the channel page matches the URL stored in DB
+     * (e.g. handle vs /channel/id).
+     *
+     * @return flowable list of matching subscriptions (at most one row in practice)
+     */
+    private Flowable<List<SubscriptionEntity>> subscriptionListFlowableForChannel() {
+        return subscriptionManager.subscriptionTable()
+                .getSubscriptionFlowable(serviceId, url)
+                .switchMap(subscriptions -> {
+                    if (!subscriptions.isEmpty()) {
+                        return Flowable.just(subscriptions);
+                    }
+                    if (TextUtils.isEmpty(subscriptionUrlAlternate)
+                            || subscriptionUrlAlternate.equals(url)) {
+                        return Flowable.just(Collections.emptyList());
+                    }
+                    return subscriptionManager.subscriptionTable()
+                            .getSubscriptionFlowable(serviceId, subscriptionUrlAlternate);
+                });
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -70,6 +117,40 @@ public class ChannelTabFragment extends BaseListInfoFragment<InfoItem, ChannelTa
     public void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(false);
+        subscriptionManager = new SubscriptionManager(requireContext());
+        feedDatabaseManager = new FeedDatabaseManager(requireContext());
+        newInFeedDisposable = new CompositeDisposable();
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (ChannelTabHelper.isStreamsTab(tabHandler) && !TextUtils.isEmpty(url)) {
+            newInFeedDisposable.clear();
+            newInFeedDisposable.add(subscriptionListFlowableForChannel()
+                    .subscribeOn(Schedulers.io())
+                    .switchMap(subscriptions -> {
+                        if (subscriptions.isEmpty()) {
+                            return Flowable.just(Collections.<String>emptySet());
+                        }
+                        return feedDatabaseManager.newInFeedStreamKeysForSubscription(
+                                subscriptions.get(0).getUid());
+                    })
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(
+                            keys -> infoListAdapter.setNewInFeedStreamKeys(keys),
+                            throwable -> Log.e(TAG, "observe new-in-feed stream keys", throwable)
+                    ));
+        }
+    }
+
+    @Override
+    public void onStop() {
+        newInFeedDisposable.clear();
+        if (ChannelTabHelper.isStreamsTab(tabHandler)) {
+            infoListAdapter.setNewInFeedStreamKeys(null);
+        }
+        super.onStop();
     }
 
     @Override

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:key="@string/proxy_manage_profiles_screen_key"
+    android:title="@string/proxy_profiles_screen_title"
+    app:iconSpaceReserved="false">
+
+    <Preference
+        android:key="@string/proxy_add_profile_pref_key"
+        android:title="@string/proxy_add_profile"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:key="@string/proxy_profile_list_category_key"
+        android:title="@string/proxy_saved_profiles_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+</PreferenceScreen>

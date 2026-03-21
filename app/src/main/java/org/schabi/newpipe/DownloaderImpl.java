@@ -8,6 +8,8 @@ import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
 import org.schabi.newpipe.error.ReCaptchaActivity;
+import org.schabi.newpipe.settings.proxy.ProxyProfile;
+import org.schabi.newpipe.settings.proxy.ProxyProfileStore;
 import org.schabi.newpipe.extractor.downloader.Downloader;
 import org.schabi.newpipe.extractor.downloader.Request;
 import org.schabi.newpipe.extractor.downloader.Response;
@@ -93,51 +95,45 @@ public final class DownloaderImpl extends Downloader {
         int configuredProxyPort = -1;
 
         if (proxyEnabled) {
-            final String rawHost = preferences.getString(
-                    context.getString(R.string.proxy_host_key), "");
-            final String host = normalizeHost(rawHost);
-            final String rawPort = preferences.getString(
-                    context.getString(R.string.proxy_port_key),
-                    context.getString(R.string.proxy_port_default));
-            final Integer port = parsePort(rawPort);
+            final ProxyProfile profile = ProxyProfileStore.getActiveProfileForConnection(context);
+            if (profile != null) {
+                final String host = normalizeHost(profile.getHost());
+                final Integer port = parsePort(profile.getPort());
 
-            if (host != null && port != null) {
-                final String proxyType = preferences.getString(
-                        context.getString(R.string.proxy_type_key),
-                        context.getString(R.string.proxy_type_http_value));
-                final String normalizedType = proxyType == null
-                        ? context.getString(R.string.proxy_type_http_value)
-                        : proxyType.trim().toLowerCase(Locale.US);
+                if (host != null && port != null) {
+                    final String proxyType = profile.getProxyType();
+                    final String normalizedType = proxyType == null
+                            ? context.getString(R.string.proxy_type_http_value)
+                            : proxyType.trim().toLowerCase(Locale.US);
 
-                final Proxy.Type type = context.getString(R.string.proxy_type_socks5_value)
-                        .equals(normalizedType)
-                        ? Proxy.Type.SOCKS
-                        : Proxy.Type.HTTP;
-                final Proxy proxy = new Proxy(type, new InetSocketAddress(host, port));
-                builder.proxy(proxy);
-                configuredProxy = proxy;
-                configuredProxyHost = host;
-                configuredProxyPort = port;
+                    final Proxy.Type type = context.getString(R.string.proxy_type_socks5_value)
+                            .equals(normalizedType)
+                            ? Proxy.Type.SOCKS
+                            : Proxy.Type.HTTP;
+                    final Proxy proxy = new Proxy(type, new InetSocketAddress(host, port));
+                    builder.proxy(proxy);
+                    configuredProxy = proxy;
+                    configuredProxyHost = host;
+                    configuredProxyPort = port;
 
-                final String username = normalizeHost(preferences.getString(
-                        context.getString(R.string.proxy_username_key), ""));
-                final String password = preferences.getString(
-                        context.getString(R.string.proxy_password_key), "");
+                    final String username = normalizeHost(profile.getUsername());
+                    final String password = profile.getPassword();
 
-                if (username != null) {
-                    final String normalizedPassword = password == null ? "" : password;
-                    configuredProxyUser = username;
-                    configuredProxyPassword = normalizedPassword;
-                    if (type == Proxy.Type.HTTP) {
-                        builder.proxyAuthenticator((route, response) -> {
-                            if (response.request().header("Proxy-Authorization") != null) {
-                                return null;
-                            }
-                            return response.request().newBuilder()
-                                    .header("Proxy-Authorization",
-                                            Credentials.basic(username, normalizedPassword))
-                                    .build();
-                        });
+                    if (username != null) {
+                        final String normalizedPassword = password == null ? "" : password;
+                        configuredProxyUser = username;
+                        configuredProxyPassword = normalizedPassword;
+                        if (type == Proxy.Type.HTTP) {
+                            builder.proxyAuthenticator((route, response) -> {
+                                if (response.request().header("Proxy-Authorization") != null) {
+                                    return null;
+                                }
+                                return response.request().newBuilder()
+                                        .header("Proxy-Authorization",
+                                                Credentials.basic(username, normalizedPassword))
+                                        .build();
+                            });
+                        }
                     }
                 }
             }

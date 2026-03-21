@@ -2,14 +2,18 @@ package org.schabi.newpipe.local.subscription
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.xwray.groupie.Group
 import io.reactivex.rxjava3.core.Flowable
+import io.reactivex.rxjava3.functions.BiFunction
 import io.reactivex.rxjava3.processors.BehaviorProcessor
 import io.reactivex.rxjava3.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
+import org.schabi.newpipe.MainActivity
+import org.schabi.newpipe.database.subscription.SubscriptionEntity
 import org.schabi.newpipe.info_list.ItemViewMode
 import org.schabi.newpipe.local.feed.FeedDatabaseManager
 import org.schabi.newpipe.local.subscription.item.ChannelItem
@@ -52,9 +56,28 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             { mutableStateLiveData.postValue(SubscriptionState.ErrorState(it)) }
         )
 
-    private var stateItemsDisposable = subscriptionManager.subscriptions()
+    private var stateItemsDisposable = Flowable.combineLatest(
+        subscriptionManager.subscriptions(),
+        feedDatabaseManager.subscriptionIdsWithNotFullyPlayedFeedStreams(),
+        BiFunction { subs: List<SubscriptionEntity>, idsWithNew: List<Long> ->
+            val newSet = idsWithNew.toHashSet()
+            if (MainActivity.DEBUG) {
+                Log.d(
+                    TAG,
+                    "feed rows with not-fully-played streams → ${newSet.size} subscription id(s): $newSet"
+                )
+            }
+            subs.map { entity ->
+                ChannelItem(
+                    entity.toChannelInfoItem(),
+                    entity.uid,
+                    ChannelItem.ItemVersion.MINI,
+                    newSet.contains(entity.uid)
+                )
+            }
+        }
+    )
         .throttleLatest(DEFAULT_THROTTLE_TIMEOUT, TimeUnit.MILLISECONDS)
-        .map { it.map { entity -> ChannelItem(entity.toChannelInfoItem(), entity.uid, ChannelItem.ItemVersion.MINI) } }
         .subscribeOn(Schedulers.io())
         .subscribe(
             { mutableStateLiveData.postValue(SubscriptionState.LoadedState(it)) },
@@ -81,6 +104,7 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
     }
 
     companion object {
+        private val TAG: String = SubscriptionViewModel::class.java.simpleName
 
         /**
          * Returns whether to use GridLayout mode for Subscription Fragment.
